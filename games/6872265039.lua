@@ -62,75 +62,11 @@ for _, v in vape.Modules do
 end
 
 run(function()
-	local Sprint
-	local old
-	
-	Sprint = vape.Categories.Combat:CreateModule({
-		Name = 'Sprint',
-		Function = function(callback)
-			if callback then
-				if inputService.TouchEnabled then pcall(function() lplr.PlayerGui.MobileUI['2'].Visible = false end) end
-				old = bedwars.SprintController.stopSprinting
-				bedwars.SprintController.stopSprinting = function(...)
-					local call = old(...)
-					bedwars.SprintController:startSprinting()
-					return call
-				end
-				Sprint:Clean(entitylib.Events.LocalAdded:Connect(function() bedwars.SprintController:stopSprinting() end))
-				bedwars.SprintController:stopSprinting()
-			else
-				if inputService.TouchEnabled then pcall(function() lplr.PlayerGui.MobileUI['2'].Visible = true end) end
-				bedwars.SprintController.stopSprinting = old
-				bedwars.SprintController:stopSprinting()
-			end
-		end,
-		Tooltip = 'Sets your sprinting to true.'
-	})
-end)
-	
-run(function()
-	local AutoGamble
-	
-	AutoGamble = vape.Categories.Minigames:CreateModule({
-		Name = 'AutoGamble',
-		Function = function(callback)
-			if callback then
-				AutoGamble:Clean(bedwars.Client:GetNamespace('RewardCrate'):Get('CrateOpened'):Connect(function(data)
-					if data.openingPlayer == lplr then
-						local tab = bedwars.CrateItemMeta[data.reward.itemType] or {displayName = data.reward.itemType or 'unknown'}
-						notif('AutoGamble', 'Won '..tab.displayName, 5)
-					end
-				end))
-	
-				repeat
-					if not bedwars.CrateAltarController.activeCrates[1] then
-						for _, v in bedwars.Store:getState().Consumable.inventory do
-							if v.consumable:find('crate') then
-								bedwars.CrateAltarController:pickCrate(v.consumable, 1)
-								task.wait(1.2)
-								if bedwars.CrateAltarController.activeCrates[1] and bedwars.CrateAltarController.activeCrates[1][2] then
-									bedwars.Client:GetNamespace('RewardCrate'):Get('OpenRewardCrate'):SendToServer({
-										crateId = bedwars.CrateAltarController.activeCrates[1][2].attributes.crateId
-									})
-								end
-								break
-							end
-						end
-					end
-					task.wait(1)
-				until not AutoGamble.Enabled
-			end
-		end,
-		Tooltip = 'Automatically opens lucky crates, piston inspired!'
-	})
-end)
-	
-
-run(function()
-    local DuelsGrinder
+    local AutoFarm
     local AutoQueue
     local AutoReset
     local SendWebhook
+    local TestWebhookButton
     local WebhookURL = "https://discord.com/api/webhooks/1454499333784338629/OD7P0Gs4gD7rNlLleUefu1K4x9Bo2Wl6uRIdpdAvCfToOt_wtW20USUKLGOLGF596slX"
     
     local CHEST_NAME = "chest"
@@ -139,18 +75,28 @@ run(function()
     local hasTriggered = false
     local isProcessing = false
     local queueLoop
-    local webhookLoop
+    local gameMonitor
     local heightMonitor
+    local lastWebhookTime = 0
+    local WEBHOOK_COOLDOWN = 3
+    local lastGamesPlayed = 0
     
     local function sendWebhookNotification()
-        if not SendWebhook.Enabled then return end
+        local playerLevel = lplr:GetAttribute("PlayerLevel") or 0
+        local battlePassXP = lplr:GetAttribute("BattlePassXP") or 0
+        local gamesPlayed = lplr:GetAttribute("GamesPlayed") or 0
         
-        local lvl = lplr:GetAttribute("PlayerLevel") or 0
+        local avatarUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. tostring(lplr.UserId) .. "&width=150&height=150&format=png"
+        
         local data = {
+            ["content"] = "@everyone",
             ["embeds"] = {{
-                ["title"] = "Duels Grinder - Level Update",
-                ["description"] = "Current player level: **" .. tostring(lvl) .. "**",
-                ["color"] = 3447003,
+                ["title"] = "hey ur account is still grinding",
+                ["description"] = "just wanted to let you know whats going on with your stats",
+                ["color"] = 5814783,
+                ["thumbnail"] = {
+                    ["url"] = avatarUrl
+                },
                 ["fields"] = {
                     {
                         ["name"] = "Username",
@@ -158,21 +104,34 @@ run(function()
                         ["inline"] = true
                     },
                     {
-                        ["name"] = "User ID",
-                        ["value"] = tostring(lplr.UserId),
+                        ["name"] = "Display Name",
+                        ["value"] = lplr.DisplayName,
                         ["inline"] = true
                     },
                     {
-                        ["name"] = "Job ID",
-                        ["value"] = game.JobId,
-                        ["inline"] = false
+                        ["name"] = "Level",
+                        ["value"] = tostring(playerLevel),
+                        ["inline"] = true
+                    },
+                    {
+                        ["name"] = "Battle Pass XP",
+                        ["value"] = tostring(battlePassXP),
+                        ["inline"] = true
+                    },
+                    {
+                        ["name"] = "Games Played",
+                        ["value"] = tostring(gamesPlayed),
+                        ["inline"] = true
                     }
                 },
-                ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%S")
+                ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%S"),
+                ["footer"] = {
+                    ["text"] = "your autofarmer is running"
+                }
             }}
         }
         
-        pcall(function()
+        local success = pcall(function()
             request({
                 Url = WebhookURL,
                 Method = "POST",
@@ -182,6 +141,25 @@ run(function()
                 Body = game:GetService("HttpService"):JSONEncode(data)
             })
         end)
+        
+        return success
+    end
+    
+    local function sendTestWebhook()
+        local currentTime = tick()
+        if currentTime - lastWebhookTime < WEBHOOK_COOLDOWN then
+            vape:CreateNotification("AutoFarm", "Wait " .. math.ceil(WEBHOOK_COOLDOWN - (currentTime - lastWebhookTime)) .. " seconds before sending another webhook", 2)
+            return
+        end
+        
+        lastWebhookTime = currentTime
+        vape:CreateNotification("AutoFarm", "Sending test webhook...", 2)
+        local success = sendWebhookNotification()
+        if success then
+            vape:CreateNotification("AutoFarm", "Webhook sent successfully!", 3)
+        else
+            vape:CreateNotification("AutoFarm", "Failed to send webhook", 3, "error")
+        end
     end
     
     local function findNearestChest()
@@ -239,7 +217,7 @@ run(function()
         isProcessing = true
         
         pcall(function()
-            vape:CreateNotification("Duels Grinder", "Height matched! Resetting...", 3)
+            vape:CreateNotification("AutoFarm", "Height matched! Resetting...", 3)
             
             if entitylib.isAlive then
                 local humanoid = entitylib.character.Humanoid
@@ -249,7 +227,7 @@ run(function()
             end
             task.wait(0.3)
             
-            vape:CreateNotification("Duels Grinder", "Teleporting to new server...", 3)
+            vape:CreateNotification("AutoFarm", "Teleporting to new server...", 3)
             
             local data = game:GetService("TeleportService"):GetLocalPlayerTeleportData()
             task.wait(0.25)
@@ -281,20 +259,22 @@ run(function()
         return false
     end
     
-    DuelsGrinder = vape.Categories.Utility:CreateModule({
-        Name = 'DuelsGrinder',
+    AutoFarm = vape.Categories.Utility:CreateModule({
+        Name = 'AutoFarm',
         Function = function(callback)
             if callback then
-                vape:CreateNotification("Duels Grinder", "Starting auto grinder...", 3)
+                vape:CreateNotification("AutoFarm", "Starting auto farm...", 3)
                 hasTriggered = false
                 isProcessing = false
                 
+                lastGamesPlayed = lplr:GetAttribute("GamesPlayed") or 0
+                
                 if game.PlaceId == 6872265039 then
-                    vape:CreateNotification("Duels Grinder", "In lobby - starting queue spam", 5)
+                    vape:CreateNotification("AutoFarm", "In lobby - starting queue spam", 5)
                     
                     if AutoQueue.Enabled then
                         queueLoop = task.spawn(function()
-                            while DuelsGrinder.Enabled and AutoQueue.Enabled do
+                            while AutoFarm.Enabled and AutoQueue.Enabled do
                                 pcall(function()
                                     local events = game:GetService("ReplicatedStorage"):WaitForChild("events-@easy-games/lobby:shared/event/lobby-events@getEvents.Events", 5)
                                     if events then
@@ -312,20 +292,28 @@ run(function()
                     end
                     
                     if SendWebhook.Enabled then
-                        webhookLoop = task.spawn(function()
-                            while DuelsGrinder.Enabled and SendWebhook.Enabled do
-                                sendWebhookNotification()
+                        gameMonitor = task.spawn(function()
+                            while AutoFarm.Enabled and SendWebhook.Enabled do
+                                local currentGames = lplr:GetAttribute("GamesPlayed") or 0
+                                local gamesPlayed = currentGames - lastGamesPlayed
+                                
+                                if gamesPlayed >= 2 then
+                                    vape:CreateNotification("AutoFarm", "2 games played! Sending webhook...", 3)
+                                    sendWebhookNotification()
+                                    lastGamesPlayed = currentGames
+                                end
+                                
                                 task.wait(5)
                             end
                         end)
                     end
                 else
-                    vape:CreateNotification("Duels Grinder", "Not in lobby (PlaceId: " .. game.PlaceId .. ")", 5)
+                    vape:CreateNotification("AutoFarm", "Not in lobby (PlaceId: " .. game.PlaceId .. ")", 5)
                 end
                 
                 if AutoReset.Enabled then
                     heightMonitor = task.spawn(function()
-                        while DuelsGrinder.Enabled and AutoReset.Enabled do
+                        while AutoFarm.Enabled and AutoReset.Enabled do
                             if entitylib.isAlive then
                                 local humanoidRootPart = entitylib.character.RootPart
                                 if humanoidRootPart then
@@ -356,16 +344,16 @@ run(function()
                     end)
                 end
             else
-                vape:CreateNotification("Duels Grinder", "Stopped auto grinder", 3)
+                vape:CreateNotification("AutoFarm", "Stopped auto farm", 3)
                 
                 if queueLoop then
                     pcall(function() task.cancel(queueLoop) end)
                     queueLoop = nil
                 end
                 
-                if webhookLoop then
-                    pcall(function() task.cancel(webhookLoop) end)
-                    webhookLoop = nil
+                if gameMonitor then
+                    pcall(function() task.cancel(gameMonitor) end)
+                    gameMonitor = nil
                 end
                 
                 if heightMonitor then
@@ -380,21 +368,29 @@ run(function()
         Tooltip = 'Auto queue and grind duels\nResets when at chest height'
     })
     
-    AutoQueue = DuelsGrinder:CreateToggle({
+    AutoQueue = AutoFarm:CreateToggle({
         Name = 'Auto Queue',
         Default = true,
         Tooltip = 'Automatically queues for skywars_to2'
     })
     
-    AutoReset = DuelsGrinder:CreateToggle({
+    AutoReset = AutoFarm:CreateToggle({
         Name = 'Auto Reset',
         Default = true,
         Tooltip = 'Resets and teleports when at chest height'
     })
     
-    SendWebhook = DuelsGrinder:CreateToggle({
+    SendWebhook = AutoFarm:CreateToggle({
         Name = 'Send Webhook',
         Default = false,
-        Tooltip = 'Sends level updates to Discord webhook'
+        Tooltip = 'Sends stats every 2 games played'
+    })
+    
+    TestWebhookButton = AutoFarm:CreateButton({
+        Name = "Test Webhook",
+        Function = function()
+            sendTestWebhook()
+        end,
+        Tooltip = "Send ONE test webhook (3 second cooldown)"
     })
 end)
