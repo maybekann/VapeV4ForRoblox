@@ -20,11 +20,13 @@ local heightMonitor
 
 local function notify(title, message, duration)
     print("[" .. title .. "] " .. message)
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = title,
-        Text = message,
-        Duration = duration or 5
-    })
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = title,
+            Text = message,
+            Duration = duration or 5
+        })
+    end)
 end
 
 local function sendWebhook()
@@ -208,9 +210,9 @@ if game.PlaceId == 6872265039 then
     
     queueLoop = task.spawn(function()
         while true do
+            task.wait(3)
             pcall(function()
                 local events = ReplicatedStorage:WaitForChild("events-@easy-games/lobby:shared/event/lobby-events@getEvents.Events", 5)
-				task.wait(3)
                 if events then
                     local joinQueue = events:FindFirstChild("joinQueue")
                     if joinQueue then
@@ -220,7 +222,7 @@ if game.PlaceId == 6872265039 then
                     end
                 end
             end)
-            task.wait(5)
+            task.wait(2)
         end
     end)
     
