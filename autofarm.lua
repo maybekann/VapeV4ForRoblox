@@ -198,8 +198,8 @@ teleportConnection = player.OnTeleport:Connect(function()
     ]])
 end)
 
-notify("AutoFarm", "script loaded! starting in 2 seconds...", 3)
-task.wait(2)
+notify("AutoFarm", "script loaded! starting in one sec...", 3)
+task.wait(1)
 
 lastGamesPlayed = player:GetAttribute("GamesPlayed") or 0
 
@@ -210,6 +210,7 @@ if game.PlaceId == 6872265039 then
         while true do
             pcall(function()
                 local events = ReplicatedStorage:WaitForChild("events-@easy-games/lobby:shared/event/lobby-events@getEvents.Events", 5)
+				task.wait(3)
                 if events then
                     local joinQueue = events:FindFirstChild("joinQueue")
                     if joinQueue then
