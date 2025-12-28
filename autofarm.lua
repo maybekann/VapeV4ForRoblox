@@ -210,9 +210,9 @@ if game.PlaceId == 6872265039 then
     
     queueLoop = task.spawn(function()
         while true do
-            task.wait(3)
             pcall(function()
                 local events = ReplicatedStorage:WaitForChild("events-@easy-games/lobby:shared/event/lobby-events@getEvents.Events", 5)
+                task.wait(3)
                 if events then
                     local joinQueue = events:FindFirstChild("joinQueue")
                     if joinQueue then
@@ -222,7 +222,7 @@ if game.PlaceId == 6872265039 then
                     end
                 end
             end)
-            task.wait(2)
+            task.wait(5)
         end
     end)
     
