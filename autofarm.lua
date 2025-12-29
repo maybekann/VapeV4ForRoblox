@@ -1,20 +1,15 @@
-repeat task.wait() until game:IsLoaded()
+repeat wait() until game:IsLoaded()
 
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
-local WebhookURL = "https://discord.com/api/webhooks/1454499333784338629/OD7P0Gs4gD7rNlLleUefu1K4x9Bo2Wl6uRIdpdAvCfToOt_wtW20USUKLGOLGF596slX"
 local CHEST_NAME = "chest"
 local HEIGHT_TOLERANCE = 2
 local CHECK_INTERVAL = 0.05
 local hasTriggered = false
 local isProcessing = false
-local lastGamesPlayed = 0
 local queueLoop
-local gameMonitor
 local heightMonitor
 
 local function notify(title, message, duration)
@@ -24,68 +19,6 @@ local function notify(title, message, duration)
             Title = title,
             Text = message,
             Duration = duration or 5
-        })
-    end)
-end
-
-local function sendWebhook()
-    local playerLevel = player:GetAttribute("PlayerLevel") or 0
-    local battlePassXP = player:GetAttribute("BattlePassXP") or 0
-    local gamesPlayed = player:GetAttribute("GamesPlayed") or 0
-    
-    local avatarUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. tostring(player.UserId) .. "&width=150&height=150&format=png"
-    
-    local data = {
-        ["content"] = "@everyone",
-        ["embeds"] = {{
-            ["title"] = "Game Completed - Stats Update",
-            ["description"] = "Your account just finished a game",
-            ["color"] = 5814783,
-            ["thumbnail"] = {
-                ["url"] = avatarUrl
-            },
-            ["fields"] = {
-                {
-                    ["name"] = "Username",
-                    ["value"] = player.Name,
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "Display Name",
-                    ["value"] = player.DisplayName,
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "Level",
-                    ["value"] = tostring(playerLevel),
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "Battle Pass XP",
-                    ["value"] = tostring(battlePassXP),
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "Total Games Played",
-                    ["value"] = tostring(gamesPlayed),
-                    ["inline"] = true
-                }
-            },
-            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%S"),
-            ["footer"] = {
-                ["text"] = "AutoFarmer Status: Active"
-            }
-        }}
-    }
-    
-    pcall(function()
-        request({
-            Url = WebhookURL,
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json"
-            },
-            Body = HttpService:JSONEncode(data)
         })
     end)
 end
@@ -146,7 +79,7 @@ local function fastReset()
     isProcessing = true
     
     pcall(function()
-        notify("AutoFarm", "Height matched, resetting...", 3)
+        notify("AutoFarm", "height matched resetting...", 3)
         
         local character = player.Character
         if character then
@@ -157,11 +90,11 @@ local function fastReset()
         end
         task.wait(0.3)
         
-        notify("AutoFarm", "Game ended, sending webhook...", 3)
-        sendWebhook()
+        notify("AutoFarm", "teleporting to new server...", 3)
         
-        notify("AutoFarm", "Returning to lobby...", 3)
-        TeleportService:Teleport(6872265039, player)
+        local data = TeleportService:GetLocalPlayerTeleportData()
+        task.wait(0.25)
+        TeleportService:Teleport(game.PlaceId, player, data)
     end)
 end
 
@@ -190,13 +123,11 @@ local function isAtChestHeight()
     return false
 end
 
-notify("AutoFarm", "Script loaded! Starting in one second...", 3)
+notify("AutoFarm", "script loaded! starting in one sec...", 3)
 task.wait(1)
 
-lastGamesPlayed = player:GetAttribute("GamesPlayed") or 0
-
 if game.PlaceId == 6872265039 then
-    notify("AutoFarm", "In lobby, starting queue spam...", 5)
+    notify("AutoFarm", "in lobby..starting queue spam", 5)
     
     queueLoop = task.spawn(function()
         while true do
@@ -217,39 +148,39 @@ if game.PlaceId == 6872265039 then
     end)
     
 else
-    notify("AutoFarm", "In game mode, starting height monitor...", 5)
-    
-    heightMonitor = task.spawn(function()
-        while true do
-            local character = player.Character
-            if character then
-                local rootPart = character:FindFirstChild("HumanoidRootPart")
-                if rootPart then
-                    local nearestChest = findNearestChest()
-                    
-                    if nearestChest then
-                        local playerHeight = rootPart.Position.Y
-                        local chestHeight = getObjectHeight(nearestChest)
-                        
-                        if chestHeight then
-                            local heightDiff = math.abs(playerHeight - chestHeight)
-                            
-                            if heightDiff <= HEIGHT_TOLERANCE then
-                                fastReset()
-                                break
-                            end
-                        end
-                    end
-                    
-                    if isAtChestHeight() then
-                        fastReset()
-                        break
-                    end
-                end
-            end
-            task.wait(CHECK_INTERVAL)
-        end
-    end)
+    notify("AutoFarm", "not in lobby (PlaceId: " .. game.PlaceId .. ")", 5)
 end
 
-notify("AutoFarm", "Everything loaded and ready!", 3)
+heightMonitor = task.spawn(function()
+    while true do
+        local character = player.Character
+        if character then
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                local nearestChest = findNearestChest()
+                
+                if nearestChest then
+                    local playerHeight = rootPart.Position.Y
+                    local chestHeight = getObjectHeight(nearestChest)
+                    
+                    if chestHeight then
+                        local heightDiff = math.abs(playerHeight - chestHeight)
+                        
+                        if heightDiff <= HEIGHT_TOLERANCE then
+                            fastReset()
+                            break
+                        end
+                    end
+                end
+                
+                if isAtChestHeight() then
+                    fastReset()
+                    break
+                end
+            end
+        end
+        task.wait(CHECK_INTERVAL)
+    end
+end)
+
+notify("AutoFarm", "everything loaded n ready", 3)
