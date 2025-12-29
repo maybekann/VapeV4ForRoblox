@@ -6,7 +6,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
-local queue_on_teleport = queue_on_teleport or syn and syn.queue_on_teleport or function() end
 local WebhookURL = "https://discord.com/api/webhooks/1454499333784338629/OD7P0Gs4gD7rNlLleUefu1K4x9Bo2Wl6uRIdpdAvCfToOt_wtW20USUKLGOLGF596slX"
 local CHEST_NAME = "chest"
 local HEIGHT_TOLERANCE = 2
@@ -39,8 +38,8 @@ local function sendWebhook()
     local data = {
         ["content"] = "@everyone",
         ["embeds"] = {{
-            ["title"] = "hey ur account is still grinding",
-            ["description"] = "just wanted to let you know whats going on with your stats",
+            ["title"] = "Game Completed - Stats Update",
+            ["description"] = "Your account just finished a game",
             ["color"] = 5814783,
             ["thumbnail"] = {
                 ["url"] = avatarUrl
@@ -67,14 +66,14 @@ local function sendWebhook()
                     ["inline"] = true
                 },
                 {
-                    ["name"] = "Games Played",
+                    ["name"] = "Total Games Played",
                     ["value"] = tostring(gamesPlayed),
                     ["inline"] = true
                 }
             },
             ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%S"),
             ["footer"] = {
-                ["text"] = "your autofarmer is running"
+                ["text"] = "AutoFarmer Status: Active"
             }
         }}
     }
@@ -147,7 +146,7 @@ local function fastReset()
     isProcessing = true
     
     pcall(function()
-        notify("AutoFarm", "height matched resetting...", 3)
+        notify("AutoFarm", "Height matched, resetting...", 3)
         
         local character = player.Character
         if character then
@@ -158,11 +157,11 @@ local function fastReset()
         end
         task.wait(0.3)
         
-        notify("AutoFarm", "teleporting to new server...", 3)
+        notify("AutoFarm", "Game ended, sending webhook...", 3)
+        sendWebhook()
         
-        local data = TeleportService:GetLocalPlayerTeleportData()
-        task.wait(0.25)
-        TeleportService:Teleport(game.PlaceId, player, data)
+        notify("AutoFarm", "Returning to lobby...", 3)
+        TeleportService:Teleport(6872265039, player)
     end)
 end
 
@@ -191,22 +190,13 @@ local function isAtChestHeight()
     return false
 end
 
-local teleportConnection
-teleportConnection = player.OnTeleport:Connect(function()
-    queue_on_teleport([[
-        repeat task.wait() until game:IsLoaded()
-        task.wait(1)
-        loadstring(game:HttpGet('https://raw.githubusercontent.com/maybekann/VapeV4ForRoblox/main/autofarm.lua', true))()
-    ]])
-end)
-
-notify("AutoFarm", "script loaded! starting in one sec...", 3)
+notify("AutoFarm", "Script loaded! Starting in one second...", 3)
 task.wait(1)
 
 lastGamesPlayed = player:GetAttribute("GamesPlayed") or 0
 
 if game.PlaceId == 6872265039 then
-    notify("AutoFarm", "in lobby..starting queue spam", 5)
+    notify("AutoFarm", "In lobby, starting queue spam...", 5)
     
     queueLoop = task.spawn(function()
         while true do
@@ -226,54 +216,40 @@ if game.PlaceId == 6872265039 then
         end
     end)
     
-    gameMonitor = task.spawn(function()
-        while true do
-            local currentGames = player:GetAttribute("GamesPlayed") or 0
-            local gamesPlayed = currentGames - lastGamesPlayed
-            
-            if gamesPlayed >= 2 then
-                notify("AutoFarm", "played 2 games, sending a webhook", 3)
-                sendWebhook()
-                lastGamesPlayed = currentGames
-            end
-            
-            task.wait(5)
-        end
-    end)
 else
-    notify("AutoFarm", "not in lobby (PlaceId: " .. game.PlaceId .. ")", 5)
-end
-
-heightMonitor = task.spawn(function()
-    while true do
-        local character = player.Character
-        if character then
-            local rootPart = character:FindFirstChild("HumanoidRootPart")
-            if rootPart then
-                local nearestChest = findNearestChest()
-                
-                if nearestChest then
-                    local playerHeight = rootPart.Position.Y
-                    local chestHeight = getObjectHeight(nearestChest)
+    notify("AutoFarm", "In game mode, starting height monitor...", 5)
+    
+    heightMonitor = task.spawn(function()
+        while true do
+            local character = player.Character
+            if character then
+                local rootPart = character:FindFirstChild("HumanoidRootPart")
+                if rootPart then
+                    local nearestChest = findNearestChest()
                     
-                    if chestHeight then
-                        local heightDiff = math.abs(playerHeight - chestHeight)
+                    if nearestChest then
+                        local playerHeight = rootPart.Position.Y
+                        local chestHeight = getObjectHeight(nearestChest)
                         
-                        if heightDiff <= HEIGHT_TOLERANCE then
-                            fastReset()
-                            break
+                        if chestHeight then
+                            local heightDiff = math.abs(playerHeight - chestHeight)
+                            
+                            if heightDiff <= HEIGHT_TOLERANCE then
+                                fastReset()
+                                break
+                            end
                         end
                     end
-                end
-                
-                if isAtChestHeight() then
-                    fastReset()
-                    break
+                    
+                    if isAtChestHeight() then
+                        fastReset()
+                        break
+                    end
                 end
             end
+            task.wait(CHECK_INTERVAL)
         end
-        task.wait(CHECK_INTERVAL)
-    end
-end)
+    end)
+end
 
-notify("AutoFarm", "everything loaded n ready", 3)
+notify("AutoFarm", "Everything loaded and ready!", 3)
